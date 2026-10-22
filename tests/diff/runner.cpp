@@ -1,3 +1,4 @@
+#include "engine/jit/backend.h"
 #include "engine/x86/decoder.h"
 #include <iomanip>
 #include <iostream>
@@ -9,6 +10,7 @@ std::vector<uint8_t> unhex(const std::string &s) {
   return b;
 }
 int main() {
+  std::unique_ptr<execon::host::JitMemory> jit;
   std::string line;
   while (std::getline(std::cin, line)) {
     try {
@@ -35,7 +37,15 @@ int main() {
       for (size_t i = 0; i < memory.size(); ++i)
         memory[i] = uint8_t(i * 13 + 7);
       m.write(0x200000, memory);
-      execon::ir::execute(ins, c, m);
+      if (command == "jit") {
+        if (!jit)
+          jit = std::make_unique<execon::host::JitMemory>();
+        auto native = execon::jit::compile({c.rip, {ins}}, *jit);
+        if (!native)
+          throw std::runtime_error("not translated");
+        native->run(c);
+      } else
+        execon::ir::execute(ins, c, m);
       for (auto r : c.gpr)
         std::cout << std::hex << r << ' ';
       std::cout << c.flags() << ' ' << c.rip << ' ' << unsigned(ins.length) << ' ';

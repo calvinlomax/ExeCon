@@ -32,3 +32,11 @@ Implemented a handwritten arithmetic opcode table and mode-aware decoder, 8/16/3
 Validation: 5,144 randomized/edge-case full-state instruction comparisons against Unicorn 2.1.4 pass in 32/64-bit interpreter modes; all general registers, defined flags, RIP and 4 KiB of memory are compared. 20,000 random decoder inputs produced 9,737 supported decodes whose lengths all match Capstone 5.0.7. Oracle uncovered a real zero-count 32-bit shift bug (upper-register zero extension); fixed and regression-tested without weakening comparisons. Undefined AF/OF/CF cases are excluded only per architectural definitions. Unit and ASan/UBSan tests pass. Unicorn needs execution outside this workspace sandbox (sandbox raises SIGILL during its memory/JIT setup); the product does not depend on it.
 
 Remaining: broader instruction coverage, block/sequence oracle tests, SSE2, strings, atomics, multiply/divide, 16-bit address forms. Test fixtures are generated from source; no third-party binaries committed.
+
+## M3 — native ARM64 integer backend (partial)
+
+Implemented a handwritten ARM64 encoder, fixed scratch register allocation, actual native MOV and integer ALU emission for 8/16/32/64-bit register operands, lazy flag helper, MAP_JIT arena, W^X toggling, icache flush, signed executable/test binaries, guest-PC block cache, native-PC metadata, interpreter fallback and page-generation invalidation. Memory writes terminate blocks to detect late-written/self-modifying code correctly. No global fault-handler state.
+
+Validation: 1,024 native full-state oracle comparisons pass against Unicorn; expanded interpreter oracle passes 5,312 cases and 20,000 decoder inputs. 1,000 multi-instruction JIT/interpreter sequences, encoding golden words, cache reuse/invalidation, SMC and precise checked faults pass. Normal and ASan/UBSan unit builds pass (native JIT intentionally disabled under sanitizers). Sanitizer build initially caught unused platform fields under -Werror; corrected without relaxing warnings.
+
+Remaining M3 requirements: SSE2, native memory/branch translation, NZCV fast flags, direct chaining, general allocation, host signal/Mach exception recovery. See ADR 3. This is a usable native integer subset, not a completed M3.

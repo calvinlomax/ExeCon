@@ -50,8 +50,10 @@ for bits in (64, 32):
                     if opcode in (0x08, 0x20, 0x30, 0x84):
                         defined &= ~0x10  # AF undefined for logical operations.
                     cases.append((bits, code, values, flags, defined))
-        if args.backend == 'interp':
-            for tail in (b'\xff\xc0', b'\xff\xc8', b'\xf7\xd8', b'\xd1\xe0', b'\xd1\xe8', b'\xd1\xf8', b'\xd3\xe0', b'\xd3\xf8'):
+        if True:
+            for tail in (b'\xff\xc0', b'\xff\xc8', b'\xf7\xd8', b'\xf7\xd0', b'\xd1\xe0', b'\xd1\xe8', b'\xd1\xf8', b'\xd3\xe0', b'\xd3\xf8'):
+                if args.backend == 'jit' and tail[0] in (0xd1, 0xd3):
+                    continue
                 if width == 8:
                     tail = bytes([tail[0]-1]) + tail[1:]
                 for n in range(24):

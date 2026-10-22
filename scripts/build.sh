@@ -6,6 +6,9 @@ cmake -S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Debug "$@"
 cmake --build "$build_dir" --parallel
 if [[ "$(uname -sm)" == "Darwin arm64" ]]; then
   scripts/sign.sh "$build_dir/execon"
+  for test_binary in execon_tests execon_diff; do
+    if [[ -f "$build_dir/$test_binary" ]]; then scripts/sign.sh "$build_dir/$test_binary"; fi
+  done
   if [[ -f app/ExeCon.xcodeproj/project.pbxproj ]]; then
     scripts/build-app.sh "$build_dir"
   fi
