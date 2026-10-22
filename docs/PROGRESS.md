@@ -40,3 +40,15 @@ Implemented a handwritten ARM64 encoder, fixed scratch register allocation, actu
 Validation: 1,024 native full-state oracle comparisons pass against Unicorn; expanded interpreter oracle passes 5,312 cases and 20,000 decoder inputs. 1,000 multi-instruction JIT/interpreter sequences, encoding golden words, cache reuse/invalidation, SMC and precise checked faults pass. Normal and ASan/UBSan unit builds pass (native JIT intentionally disabled under sanitizers). Sanitizer build initially caught unused platform fields under -Werror; corrected without relaxing warnings.
 
 Remaining M3 requirements: SSE2, native memory/branch translation, NZCV fast flags, direct chaining, general allocation, host signal/Mach exception recovery. See ADR 3. This is a usable native integer subset, not a completed M3.
+
+## M4 — console vertical slice (partial)
+
+Real llvm-mingw-compiled PE32+ C guests now execute using the native JIT with interpreter fallback, or entirely with `--interp-only`. Implemented stack/TEB/PEB/process parameters/main-image loader lists, Windows command-line quoting, UTF-16 environment block, import stubs, x64 ABI argument/return handling, thin kernel32/CRT adapters over NT-style descriptor/handle services, standard input/output, Unicode console output, process exit and per-TEB last error. The C embedding API catches all C++ exceptions and separates guest exit from engine failure.
+
+CLI exposes inspection/import reporting, trace/IR/ARM words/stats, missing-API policies, environment/options, instruction limits, logs, decoder coverage and a JIT self-check. Optional JSON status preserves full 32-bit guest exit codes and distinguishes POSIX exit-code collisions. Unknown APIs abort even under return-error when no safe return contract is known. GUI imports are diagnostic stubs; explicit return-error can return documented failure values for a small catalog.
+
+Validation: 14 CLI integration checks pass (hello, UTF-16 surrogate-pair output, binary echo, exit 42 with JSON status, missing GUI policy, and explicit PE32 rejection), including both native and interpreter execution. Native hello executes 5 translated blocks and 7 fallback blocks. UTF conversion/invalid sequences, Windows argument quoting, API-set resolution and C API error-boundary tests pass. Full ASan/UBSan interpreter integration is also run. `--self-check` successfully executes signed MAP_JIT code.
+
+Dev compiler: llvm-mingw 20261020 UCRT macOS universal, SHA-256 e9c13e4ede38e715003ffc674d4d00a1088df8235439d1f0c16188ff0704c17e (official GitHub release asset digest). Downloaded outside sandbox and verified before extraction. No third-party binary is tracked. Compiler-built guests use an explicit entry point and -nostdlib; normal CRT startup is not yet supported.
+
+Remaining: full CRT, real DLLs, TLS initialization, SEH/C++ exceptions, signal-to-console-event dispatch, memory-level tracing and broader APIs. Load config, TLS, delay imports, managed images, DLL entry points and non-console subsystems are rejected at startup. .pdata is parsed but SEH dispatch is absent.

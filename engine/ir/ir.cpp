@@ -267,7 +267,7 @@ std::string format(const Instruction &i) {
         s << "r" << std::dec << int(o.base) << "+";
       if (o.index >= 0)
         s << "r" << int(o.index) << "*" << unsigned(o.scale) << "+";
-      s << o.displacement << "]:" << unsigned(o.width);
+      s << o.displacement << "]:" << std::dec << unsigned(o.width);
     }
   };
   if (i.dst.kind != Kind::None)

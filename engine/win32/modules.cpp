@@ -1,0 +1,200 @@
+#include "engine/win32/modules.h"
+#include "engine/nt/text.h"
+#include <algorithm>
+#include <cctype>
+#include <set>
+namespace execon::win32 {
+namespace {
+std::string canonical(std::string dll) {
+  for (auto &c : dll)
+    c = char(std::tolower(static_cast<unsigned char>(c)));
+  if (dll.starts_with("api-ms-win-core-") || dll == "kernelbase.dll")
+    return "kernel32.dll";
+  if (dll.starts_with("api-ms-win-crt-"))
+    return "ucrtbase.dll";
+  return dll;
+}
+bool known_error(const std::string &n) {
+  return n == "MessageBoxW" || n == "MessageBoxA" || n == "CreateWindowExW" ||
+         n == "CreateWindowExA" || n == "GetMessageW" || n == "GetMessageA";
+}
+uint64_t argument(cpu::Context &c, mem::AddressSpace &m, unsigned index) {
+  constexpr unsigned regs[] = {cpu::RCX, cpu::RDX, cpu::R8, cpu::R9};
+  return index < 4 ? c.gpr[regs[index]] : m.load(c.gpr[cpu::RSP] + 40 + (index - 4) * 8, 8);
+}
+} // namespace
+std::string read_string(mem::AddressSpace &m, uint64_t a, bool wide) {
+  std::string bytes;
+  std::u16string chars;
+  for (size_t i = 0; i < 32768; ++i) {
+    auto v = m.load(a + i * (wide ? 2 : 1), wide ? 2 : 1);
+    if (!v)
+      return wide ? nt::utf8(chars) : bytes;
+    if (wide)
+      chars += char16_t(v);
+    else
+      bytes += char(v);
+  }
+  throw nt::Error(87, "unterminated guest string");
+}
+bool Modules::implemented(const std::string &dll, const std::string &name) {
+  auto module = canonical(dll);
+  static const std::set<std::string> kernel = {
+      "ExitProcess",      "GetStdHandle",     "WriteFile",           "ReadFile",
+      "WriteConsoleA",    "WriteConsoleW",    "GetLastError",        "SetLastError",
+      "GetCommandLineA",  "GetCommandLineW",  "GetCurrentProcessId", "GetCurrentThreadId",
+      "GetModuleHandleA", "GetModuleHandleW", "CloseHandle"};
+  static const std::set<std::string> crt = {"puts",   "strlen", "memcpy", "memmove",
+                                            "memset", "exit",   "_exit"};
+  return (module == "kernel32.dll" && kernel.contains(name)) ||
+         ((module == "ucrtbase.dll" || module == "msvcrt.dll") && crt.contains(name)) ||
+         (module == "ntdll.dll" && name == "RtlExitUserProcess");
+}
+void Modules::report(const pe::Image &p, std::ostream &out) {
+  for (auto &i : p.imports)
+    out << (implemented(i.dll, i.name) ? "implemented " : "MISSING ") << i.dll << '!' << i.name
+        << (i.delay ? " (delay)" : "") << '\n';
+}
+void Modules::bind(const pe::Image &p, uint64_t base, mem::AddressSpace &m) {
+  constexpr uint64_t stub_base = 0x70000000;
+  uint64_t size = ((p.imports.size() * 16 + 4095) / 4096) * 4096;
+  if (!size)
+    return;
+  m.map(stub_base, size, mem::Read | mem::Write);
+  uint64_t next = stub_base;
+  for (auto &i : p.imports) {
+    stubs_.emplace(next, i);
+    m.store(next, 0x0b0f, 2);
+    auto a = base + i.iat, page = a / 4096 * 4096;
+    auto flags = m.permissions(a);
+    m.protect(page, 4096, flags | mem::Write);
+    m.store(a, next, 8);
+    m.protect(page, 4096, flags);
+    next += 16;
+  }
+  m.protect(stub_base, size, mem::Read | mem::Execute);
+}
+uint64_t Modules::invoke(const pe::Import &api, cpu::Context &c, mem::AddressSpace &m) {
+  auto arg = [&](unsigned n) { return argument(c, m, n); };
+  auto &name = api.name;
+  auto error = [&](uint32_t code) { m.store(state_.teb + 0x68, code, 4); };
+  if (!implemented(api.dll, name)) {
+    log_ << "missing API " << api.dll << '!' << name << " return-address=0x" << std::hex
+         << m.load(c.gpr[cpu::RSP], 8) << std::dec << '\n';
+    if (policy_ == MissingPolicy::ReturnError && known_error(name)) {
+      error(120);
+      if (name == "GetMessageW" || name == "GetMessageA")
+        return UINT64_MAX;
+      return 0;
+    }
+    if (policy_ == MissingPolicy::IgnoreVoid && canonical(api.dll) == "kernel32.dll" &&
+        name == "Sleep") {
+      error(120);
+      return 0;
+    }
+    throw std::runtime_error("unimplemented import " + api.dll + "!" + name +
+                             " (no safe return contract for selected policy)");
+  }
+  if (name == "ExitProcess" || name == "RtlExitUserProcess" || name == "exit" || name == "_exit") {
+    state_.exited = true;
+    state_.exit_code = uint32_t(arg(0));
+    return 0;
+  }
+  if (name == "GetStdHandle")
+    return services_.standard_handle(int32_t(uint32_t(arg(0))));
+  if (name == "GetLastError")
+    return m.load(state_.teb + 0x68, 4);
+  if (name == "SetLastError") {
+    error(uint32_t(arg(0)));
+    return 0;
+  }
+  if (name == "GetCommandLineA")
+    return state_.command_a;
+  if (name == "GetCommandLineW")
+    return state_.command_w;
+  if (name == "GetCurrentProcessId")
+    return services_.process_id();
+  if (name == "GetCurrentThreadId")
+    return 1;
+  if (name == "GetModuleHandleA" || name == "GetModuleHandleW") {
+    if (arg(0))
+      throw nt::Error(126, "named module lookup not implemented");
+    return state_.image_base;
+  }
+  if (name == "CloseHandle") {
+    services_.close(arg(0));
+    return 1;
+  }
+  if (name == "WriteFile" || name == "WriteConsoleA" || name == "WriteConsoleW" ||
+      name == "ReadFile") {
+    uint64_t h = arg(0), buffer = arg(1), count = uint32_t(arg(2)), written = arg(3),
+             overlap = arg(4);
+    if (overlap)
+      throw nt::Error(120, "overlapped/reserved console I/O unsupported");
+    if (count > 16 * 1024 * 1024)
+      throw nt::Error(8, "single I/O exceeds 16 MiB limit");
+    if (written) {
+      m.check(written, 4, mem::Write);
+      m.store(written, 0, 4);
+    } else if (name == "WriteFile" || name == "ReadFile")
+      throw nt::Error(87, "synchronous file I/O needs count pointer");
+    size_t done = 0;
+    if (name == "ReadFile") {
+      m.check(buffer, count, mem::Write);
+      auto bytes = services_.read(h, count);
+      m.write(buffer, bytes);
+      done = bytes.size();
+    } else if (name == "WriteConsoleW") {
+      m.check(buffer, count * 2, mem::Read);
+      std::u16string chars;
+      for (uint64_t i = 0; i < count; ++i)
+        chars += char16_t(m.load(buffer + i * 2, 2));
+      auto text = nt::utf8(chars);
+      services_.write(h, std::span(reinterpret_cast<const uint8_t *>(text.data()), text.size()));
+      done = count;
+    } else
+      done = services_.write(h, m.read(buffer, count));
+    if (written)
+      m.store(written, done, 4);
+    return 1;
+  }
+  if (name == "strlen")
+    return read_string(m, arg(0)).size();
+  if (name == "puts") {
+    auto text = read_string(m, arg(0)) + "\n";
+    services_.write(services_.standard_handle(-11),
+                    std::span(reinterpret_cast<const uint8_t *>(text.data()), text.size()));
+    return 0;
+  }
+  if (name == "memcpy" || name == "memmove" || name == "memset") {
+    auto dst = arg(0), src = arg(1), n = arg(2);
+    if (n > 16 * 1024 * 1024)
+      throw nt::Error(8, "CRT memory operation exceeds limit");
+    m.check(dst, n, mem::Write);
+    auto bytes = name == "memset" ? std::vector<uint8_t>(n, uint8_t(src)) : m.read(src, n);
+    m.write(dst, bytes);
+    return dst;
+  }
+  throw std::logic_error("implemented API has no handler");
+}
+void Modules::call(cpu::Context &c, mem::AddressSpace &m) {
+  auto &api = stubs_.at(c.rip);
+  if (trace_)
+    log_ << "API " << api.dll << '!' << api.name << '\n';
+  uint64_t result;
+  try {
+    result = invoke(api, c, m);
+  } catch (const nt::Error &e) {
+    m.store(state_.teb + 0x68, e.code, 4);
+    log_ << api.dll << '!' << api.name << ": " << e.what() << " (error " << e.code << ")\n";
+    result = api.name == "GetStdHandle" ? UINT64_MAX : 0;
+  }
+  c.gpr[cpu::RAX] = result;
+  if (state_.exited)
+    return;
+  auto sp = c.gpr[cpu::RSP];
+  auto target = m.load(sp, 8);
+  c.gpr[cpu::RSP] = sp + 8;
+  c.rip = target;
+}
+} // namespace execon::win32

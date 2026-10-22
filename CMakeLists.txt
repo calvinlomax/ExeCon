@@ -50,3 +50,8 @@ target_sources(execon_engine PRIVATE engine/jit/encoder.cpp engine/jit/backend.c
 if(EXECON_BUILD_TESTS)
   target_sources(execon_tests PRIVATE tests/unit/jit.cpp)
 endif()
+target_sources(execon_engine PRIVATE engine/nt/text.cpp engine/nt/services.cpp engine/win32/modules.cpp engine/host/process.cpp engine/api/execon_engine.cpp)
+
+if(EXECON_BUILD_TESTS)
+  target_sources(execon_tests PRIVATE tests/unit/runtime.cpp)
+endif()

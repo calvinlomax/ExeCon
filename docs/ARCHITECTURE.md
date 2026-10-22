@@ -29,3 +29,9 @@ The executable arena is one 4 MiB MAP_JIT mapping per dispatcher. Emission toggl
 Guest memory is currently single-threaded. All reads/writes use software permissions and seq_cst fences. Native code only touches the trusted CPU context; guest memory uses checked interpreter operations. This conservatively preserves guest order but is slow. Multi-threading, atomics and fence optimization are not implemented and are not advertised. There is no unsafe relaxed-memory switch yet.
 
 Each native block records host offsets to guest PCs and stores the current guest PC before each translated instruction. Guest memory faults are raised at the checked IR instruction; there are no native guest-pointer accesses. Native backend bugs remain host bugs rather than being disguised as guest exceptions; see ADR 3.
+
+## NT and Win32 contract
+
+Win32 adapters decode RCX/RDX/R8/R9 and arguments at RSP+40 onward, validate guest buffers, call an NT-style service, translate service errors, update TEB LastErrorValue and return via the guest stack. Native host function pointers are never put in the guest IAT. Built-in stubs reside in a checked guest executable mapping; the dispatcher recognizes only registered addresses. The NT service owns duplicated standard descriptors through reference-counted RAII file objects and a process-local handle table. Future VM/file/thread/registry services belong here, not in ABI wrappers.
+
+PE metadata parsing is intentionally distinct from execution capability: `--inspect` can report a PE32 or TLS-bearing image while startup rejects unsupported semantics. Resources/bound-import/load-config directories currently have only range metadata. The default prefix is ~/Library/Application Support/ExeCon/prefix (C: maps to its drive_c); the initial console-only services do not yet perform filesystem path operations.
