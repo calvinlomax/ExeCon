@@ -68,3 +68,11 @@ Added NT path mapping (C:, Z:, configurable drives, normalized separators/dot co
 Validation: 23 unit cases, 18 interpreter/native integration checks, 10 sanitizer interpreter integration checks pass. Compiled guests perform a binary file round-trip in a temporary mapped drive, heap allocation/reallocation/zero checks, environment lookup and performance-frequency query. Tests verify invalid handles, share conflicts, case variants, invalid heap pointers and Unicode/path boundaries.
 
 Not complete: VirtualAlloc/Free/Protect/Query wrappers, custom heaps, directory enumeration, file timestamps, full Windows path/Unicode/share semantics, threads/sync/TLS/FLS, registry, locale breadth, real DLL loading, x64 SEH/C++ exceptions, Winsock. Unsupported APIs still report and abort rather than pretending success. Heap blocks currently use whole pages with a bounded monotonic address arena; reuse and allocation performance need work. Guest binaries have access to mapped host files (Z: maps to /); this is not a security sandbox.
+
+## M7 — PE32 console vertical slice (partial)
+
+Extended process startup to 32-bit stack/PEB/process parameters/loader lists and FS-based TEB, including the empty fs:[0] SEH registration sentinel. Added absolute-offset MOV encodings needed by compiler-generated FS accesses. Import binding uses 4-byte IAT entries; stdcall signatures clean their stack, CRT calls use cdecl, and 64-bit by-value SetFilePointerEx arguments are reconstructed correctly. PE32 uses the reference interpreter even when native mode is requested; no WoW64 DLLs are involved.
+
+Validation: 42 integration checks pass over x86_64/i686 and interpreter/default dispatcher combinations. New compiler-built startup probes verify TEB self-pointers and PEB image bases, and CRT subset probes exercise malloc/puts/free plus cdecl returns. All guest sources compile with warnings-as-errors. 22 sanitizer interpreter integration checks pass. The independent integer oracle and decoder fuzz-length comparisons were rerun after adding MOV moffs.
+
+Remaining: x87, 32-bit SSE, fastcall, x86 SEH dispatch and 32-bit native translation. Earlier M4 PE32 rejection notes record historical behavior; PE32 now runs the explicitly tested console subset. This does not complete M7 or broad PE32 compatibility.

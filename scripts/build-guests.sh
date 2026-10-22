@@ -8,6 +8,6 @@ mkdir -p "$build_dir/guests"
 for arch in x86_64 i686; do
   for source in tests/guests/*.c; do
     name="$(basename "$source" .c)"
-    "$mingw/bin/$arch-w64-mingw32-clang" -O1 -fno-stack-protector -fno-builtin -mno-sse -mno-sse2 -nostdlib -Wl,--entry,mainCRTStartup -Wl,--subsystem,console "$source" -lkernel32 -luser32 -o "$build_dir/guests/$name-$arch.exe"
+    "$mingw/bin/$arch-w64-mingw32-clang" -O1 -Wall -Wextra -Werror -fno-stack-protector -fno-builtin -mno-sse -mno-sse2 -nostdlib -Wl,--entry,mainCRTStartup -Wl,--subsystem,console "$source" -lkernel32 -luser32 -lmsvcrt -o "$build_dir/guests/$name-$arch.exe"
   done
 done

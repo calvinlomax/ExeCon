@@ -219,6 +219,28 @@ struct Decoder {
         ins.op = Op::Test;
         pair(opcode & 1 ? w : 8, false);
         break;
+      case 0xa0:
+      case 0xa1:
+      case 0xa2:
+      case 0xa3: {
+        if (address_width() == 16)
+          bad("16-bit addresses not implemented");
+        Operand memory;
+        memory.kind = Kind::Memory;
+        memory.width = (opcode & 1) ? w : 8;
+        memory.address_width = address_width();
+        memory.segment = segment;
+        memory.displacement = std::bit_cast<int64_t>(imm(address_width() / 8));
+        ins.op = Op::Mov;
+        if (opcode & 2) {
+          ins.dst = memory;
+          ins.src = reg(0, memory.width);
+        } else {
+          ins.dst = reg(0, memory.width);
+          ins.src = memory;
+        }
+        break;
+      }
       case 0xa8:
       case 0xa9:
         ins.op = Op::Test;

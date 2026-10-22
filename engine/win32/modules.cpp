@@ -21,6 +21,8 @@ bool known_error(const std::string &n) {
          n == "CreateWindowExA" || n == "GetMessageW" || n == "GetMessageA";
 }
 uint64_t argument(cpu::Context &c, mem::AddressSpace &m, unsigned index) {
+  if (!c.mode64)
+    return m.load(c.gpr[cpu::RSP] + 4 + index * 4, 4);
   constexpr unsigned regs[] = {cpu::RCX, cpu::RDX, cpu::R8, cpu::R9};
   return index < 4 ? c.gpr[regs[index]] : m.load(c.gpr[cpu::RSP] + 40 + (index - 4) * 8, 8);
 }
@@ -98,7 +100,7 @@ void Modules::bind(const pe::Image &p, uint64_t base, mem::AddressSpace &m) {
     auto a = base + i.iat, page = a / 4096 * 4096;
     auto flags = m.permissions(a);
     m.protect(page, 4096, flags | mem::Write);
-    m.store(a, next, 8);
+    m.store(a, next, p.is64 ? 8 : 4);
     m.protect(page, 4096, flags);
     next += 16;
   }
@@ -107,10 +109,10 @@ void Modules::bind(const pe::Image &p, uint64_t base, mem::AddressSpace &m) {
 uint64_t Modules::invoke(const pe::Import &api, cpu::Context &c, mem::AddressSpace &m) {
   auto arg = [&](unsigned n) { return argument(c, m, n); };
   auto &name = api.name;
-  auto error = [&](uint32_t code) { m.store(state_.teb + 0x68, code, 4); };
+  auto error = [&](uint32_t code) { m.store(state_.teb + (c.mode64 ? 0x68 : 0x34), code, 4); };
   if (!implemented(api.dll, name)) {
     log_ << "missing API " << api.dll << '!' << name << " return-address=0x" << std::hex
-         << m.load(c.gpr[cpu::RSP], 8) << std::dec << '\n';
+         << m.load(c.gpr[cpu::RSP], c.mode64 ? 8 : 4) << std::dec << '\n';
     if (policy_ == MissingPolicy::ReturnError && known_error(name)) {
       error(120);
       if (name == "GetMessageW" || name == "GetMessageA")
@@ -133,7 +135,7 @@ uint64_t Modules::invoke(const pe::Import &api, cpu::Context &c, mem::AddressSpa
   if (name == "GetStdHandle")
     return services_.standard_handle(int32_t(uint32_t(arg(0))));
   if (name == "GetLastError")
-    return m.load(state_.teb + 0x68, 4);
+    return m.load(state_.teb + (c.mode64 ? 0x68 : 0x34), 4);
   if (name == "SetLastError") {
     error(uint32_t(arg(0)));
     return 0;
@@ -197,11 +199,15 @@ uint64_t Modules::invoke(const pe::Import &api, cpu::Context &c, mem::AddressSpa
                           uint32_t(arg(2)), uint32_t(arg(4)));
   }
   if (name == "SetFilePointerEx") {
-    if (arg(2))
-      m.check(arg(2), 8, mem::Write);
-    auto value = services_.seek(arg(0), std::bit_cast<int64_t>(arg(1)), uint32_t(arg(3)));
-    if (arg(2))
-      m.store(arg(2), value, 8);
+    auto pointer = arg(c.mode64 ? 2 : 3), origin = arg(c.mode64 ? 3 : 4);
+    uint64_t offset = arg(1);
+    if (!c.mode64)
+      offset |= arg(2) << 32;
+    if (pointer)
+      m.check(pointer, 8, mem::Write);
+    auto value = services_.seek(arg(0), std::bit_cast<int64_t>(offset), uint32_t(origin));
+    if (pointer)
+      m.store(pointer, value, 8);
     return 1;
   }
   if (name == "GetFileSizeEx") {
@@ -324,19 +330,55 @@ void Modules::call(cpu::Context &c, mem::AddressSpace &m) {
   try {
     result = invoke(api, c, m);
   } catch (const nt::Error &e) {
-    m.store(state_.teb + 0x68, e.code, 4);
+    m.store(state_.teb + (c.mode64 ? 0x68 : 0x34), e.code, 4);
     log_ << api.dll << '!' << api.name << ": " << e.what() << " (error " << e.code << ")\n";
     result = (api.name == "GetStdHandle" || api.name == "CreateFileA" ||
               api.name == "CreateFileW" || api.name == "HeapSize")
                  ? UINT64_MAX
                  : 0;
   }
-  c.gpr[cpu::RAX] = result;
+  c.gpr[cpu::RAX] = result & cpu::mask(c.mode64 ? 64 : 32);
   if (state_.exited)
     return;
   auto sp = c.gpr[cpu::RSP];
-  auto target = m.load(sp, 8);
-  c.gpr[cpu::RSP] = sp + 8;
+  auto target = m.load(sp, c.mode64 ? 8 : 4);
+  unsigned cleanup = 0;
+  if (!c.mode64 && canonical(api.dll) != "msvcrt.dll" && canonical(api.dll) != "ucrtbase.dll") {
+    static const std::map<std::string, unsigned> count = {{"GetStdHandle", 1},
+                                                          {"WriteFile", 5},
+                                                          {"ReadFile", 5},
+                                                          {"WriteConsoleA", 5},
+                                                          {"WriteConsoleW", 5},
+                                                          {"SetLastError", 1},
+                                                          {"GetModuleHandleA", 1},
+                                                          {"GetModuleHandleW", 1},
+                                                          {"CloseHandle", 1},
+                                                          {"CreateFileA", 7},
+                                                          {"CreateFileW", 7},
+                                                          {"SetFilePointerEx", 5},
+                                                          {"GetFileSizeEx", 2},
+                                                          {"HeapAlloc", 3},
+                                                          {"HeapFree", 3},
+                                                          {"HeapReAlloc", 4},
+                                                          {"HeapSize", 3},
+                                                          {"GetEnvironmentVariableA", 3},
+                                                          {"GetEnvironmentVariableW", 3},
+                                                          {"GetCurrentDirectoryA", 2},
+                                                          {"GetCurrentDirectoryW", 2},
+                                                          {"QueryPerformanceCounter", 1},
+                                                          {"QueryPerformanceFrequency", 1},
+                                                          {"MessageBoxW", 4},
+                                                          {"MessageBoxA", 4},
+                                                          {"GetMessageW", 4},
+                                                          {"GetMessageA", 4},
+                                                          {"CreateWindowExW", 12},
+                                                          {"CreateWindowExA", 12},
+                                                          {"Sleep", 1}};
+    auto it = count.find(api.name);
+    if (it != count.end())
+      cleanup = it->second * 4;
+  }
+  c.gpr[cpu::RSP] = sp + (c.mode64 ? 8 : 4) + cleanup;
   c.rip = target;
 }
 } // namespace execon::win32

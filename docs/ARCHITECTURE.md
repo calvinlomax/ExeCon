@@ -41,3 +41,7 @@ PE metadata parsing is intentionally distinct from execution capability: `--insp
 NT Services now owns paths and file objects. Share enforcement is process-local and compares existing file identity to prevent case/hard-link aliases bypassing checks. Windows creation modes map to POSIX open flags; unsupported security/overlapped/extended flags fail. The process heap keeps allocation metadata and invalidates freed pages; it is deliberately simple and page-granular. Time uses steady_clock nanoseconds with a matching 1 GHz reported frequency. Guest environment is explicitly configured, not inherited wholesale from the host. ANSI entry points use UTF-8 and GetACP reports 65001.
 
 Paths normalize Windows components before case lookup. C: maps to prefix/drive_c, Z: to host root, additional letters to configured roots. UNC, drive-relative C:foo, unsupported devices and alternate data streams are rejected. Case lookup is ASCII-only; Unicode normalization/collation and full NT namespace behavior remain deferred. The compatibility layer is not a guest security boundary.
+
+## 32-bit execution
+
+The same decoder/IR/interpreter runs native guest 32-bit mode inside the arm64 host. Guest addresses and GPR writes are narrowed, stack pointers and import entries are four bytes, FS holds the TEB base, and stdcall/cdecl are distinguished by module signatures. x87 state is reserved in Context but has no execution semantics yet. No WoW64 components are loaded. PE32 bypasses allocation of the native code arena and uses checked interpretation exclusively.
