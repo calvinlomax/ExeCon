@@ -1,0 +1,29 @@
+// !$*UTF8*$!
+{
+ archiveVersion = 1;
+ classes = {};
+ objectVersion = 56;
+ objects = {
+  A00000000000000000000001 = {isa = PBXProject; buildConfigurationList = A00000000000000000000002; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; knownRegions = (en, Base); mainGroup = A00000000000000000000003; productRefGroup = A00000000000000000000004; projectDirPath = ""; projectRoot = ""; targets = (A00000000000000000000005); };
+  A00000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000010, A00000000000000000000011); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+  A00000000000000000000003 = {isa = PBXGroup; children = (A00000000000000000000020, A00000000000000000000021, A00000000000000000000022, A00000000000000000000023, A00000000000000000000004); sourceTree = "<group>"; };
+  A00000000000000000000004 = {isa = PBXGroup; children = (A00000000000000000000024); name = Products; sourceTree = "<group>"; };
+  A00000000000000000000005 = {isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000006; buildPhases = (A00000000000000000000007, A00000000000000000000008); buildRules = (); dependencies = (); name = ExeCon; productName = ExeCon; productReference = A00000000000000000000024; productType = "com.apple.product-type.application"; };
+  A00000000000000000000006 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000012, A00000000000000000000013); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+  A00000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000030, A00000000000000000000031, A00000000000000000000032); runOnlyForDeploymentPostprocessing = 0; };
+  A00000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+  A00000000000000000000010 = {isa = XCBuildConfiguration; buildSettings = { SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; }; name = Debug; };
+  A00000000000000000000011 = {isa = XCBuildConfiguration; buildSettings = { SDKROOT = macosx; CLANG_ENABLE_MODULES = YES; }; name = Release; };
+  A00000000000000000000012 = {isa = XCBuildConfiguration; baseConfigurationReference = A00000000000000000000023; buildSettings = { PRODUCT_NAME = ExeCon; INFOPLIST_FILE = Info.plist; SWIFT_OBJC_BRIDGING_HEADER = BridgingHeader.h; HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../engine/api"; EXECON_ENGINE_DIR = "$(PROJECT_DIR)/../build"; LIBRARY_SEARCH_PATHS = "$(EXECON_ENGINE_DIR)"; OTHER_LDFLAGS = ("-lexecon_engine", "-lc++"); SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_TREAT_WARNINGS_AS_ERRORS = YES; ENABLE_HARDENED_RUNTIME = YES; }; name = Debug; };
+  A00000000000000000000013 = {isa = XCBuildConfiguration; baseConfigurationReference = A00000000000000000000023; buildSettings = { PRODUCT_NAME = ExeCon; INFOPLIST_FILE = Info.plist; SWIFT_OBJC_BRIDGING_HEADER = BridgingHeader.h; HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../engine/api"; EXECON_ENGINE_DIR = "$(PROJECT_DIR)/../build"; LIBRARY_SEARCH_PATHS = "$(EXECON_ENGINE_DIR)"; OTHER_LDFLAGS = ("-lexecon_engine", "-lc++"); SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_TREAT_WARNINGS_AS_ERRORS = YES; ENABLE_HARDENED_RUNTIME = YES; }; name = Release; };
+  A00000000000000000000020 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExeConApp.swift; sourceTree = "<group>"; };
+  A00000000000000000000021 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Runner.swift; sourceTree = "<group>"; };
+  A00000000000000000000022 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConsoleDecoder.swift; sourceTree = "<group>"; };
+  A00000000000000000000023 = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ../config/product.xcconfig; sourceTree = "<group>"; };
+  A00000000000000000000024 = {isa = PBXFileReference; explicitFileType = wrapper.application; path = ExeCon.app; sourceTree = BUILT_PRODUCTS_DIR; };
+  A00000000000000000000030 = {isa = PBXBuildFile; fileRef = A00000000000000000000020; };
+  A00000000000000000000031 = {isa = PBXBuildFile; fileRef = A00000000000000000000021; };
+  A00000000000000000000032 = {isa = PBXBuildFile; fileRef = A00000000000000000000022; };
+ };
+ rootObject = A00000000000000000000001;
+}

@@ -9,7 +9,7 @@ if [[ "$(uname -sm)" == "Darwin arm64" ]]; then
   for test_binary in execon_tests execon_diff; do
     if [[ -f "$build_dir/$test_binary" ]]; then scripts/sign.sh "$build_dir/$test_binary"; fi
   done
-  if [[ -f app/ExeCon.xcodeproj/project.pbxproj ]]; then
+  if [[ -f app/ExeCon.xcodeproj/project.pbxproj ]] && ! grep -q "EXECON_SANITIZE:BOOL=ON" "$build_dir/CMakeCache.txt" && [[ "${EXECON_SKIP_APP:-0}" != 1 ]]; then
     scripts/build-app.sh "$build_dir"
   fi
 fi

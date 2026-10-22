@@ -52,3 +52,11 @@ Validation: 14 CLI integration checks pass (hello, UTF-16 surrogate-pair output,
 Dev compiler: llvm-mingw 20261020 UCRT macOS universal, SHA-256 e9c13e4ede38e715003ffc674d4d00a1088df8235439d1f0c16188ff0704c17e (official GitHub release asset digest). Downloaded outside sandbox and verified before extraction. No third-party binary is tracked. Compiler-built guests use an explicit entry point and -nostdlib; normal CRT startup is not yet supported.
 
 Remaining: full CRT, real DLLs, TLS initialization, SEH/C++ exceptions, signal-to-console-event dispatch, memory-level tracing and broader APIs. Load config, TLS, delay imports, managed images, DLL entry points and non-console subsystems are rejected at startup. .pdata is parsed but SEH dispatch is absent.
+
+## M5 — SwiftUI frontend (partial validation)
+
+Implemented native SwiftUI frontend with child-process isolation, File > Open, .exe document UTI/association, window and Dock open-event handling, drag-and-drop, console/stdin, basic streaming ANSI SGR colors, Run/Stop/Restart, per-program settings, persistent recent-run history, diagnostics viewer and a real bundled-host JIT self-check. The app links the public C API for its version, but execution stays in the separate CLI host. Display buffers are bounded.
+
+The Xcode project and scheme are provided. Xcode 27.1 refuses to build because its license has not been accepted on this machine; no agreement was accepted on the user's behalf. `scripts/build.sh` detects uninitialized Xcode and builds the same SwiftUI sources with the installed Command Line Tools Swift compiler, targeting macOS 14 arm64, then packages and ad-hoc signs ExeCon.app and its embedded host. This fallback successfully builds with Swift warnings-as-errors. Plist/project syntax, arm64 architecture, signatures and embedded-host MAP_JIT execution validated after fixing a case-insensitive filesystem collision: the child is Contents/Helpers/execon, separate from Contents/MacOS/ExeCon. Streaming Swift console tests cover split multibyte UTF-8, split ANSI escapes, reset and invalid sequences.
+
+Unverified: Xcode project build, interactive Finder/Dock association and manual UI interaction. Basic console handles SGR colors, not terminal cursor movement/full terminal emulation. Stop terminates the child host; guest CTRL_C_EVENT dispatch is not implemented.
