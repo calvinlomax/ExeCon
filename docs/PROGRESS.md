@@ -16,3 +16,11 @@ Date: 2026-10-22 (America/Indiana/Indianapolis). This is an incremental implemen
 C++20 CMake project, test harness, scripts, logging, contributor rules, signing configuration and architecture skeleton. Warnings are errors. Test harness's registration list is test-only global state. Validation and later milestones follow below.
 
 M0 validation: `scripts/build.sh` and `scripts/run-tests.sh` pass on arm64. Ad-hoc hardened runtime signing succeeded.
+
+## M1 — PE and guest-memory foundation (partial)
+
+Implemented bounds-checked PE32/PE32+ parsing, section loading/permissions, DIR64/HIGHLOW relocation, named/ordinal and RVA-based delay imports, exports/forwarders, TLS callback metadata and x64 runtime-function metadata. `--inspect` prints these and all directory ranges. Sparse guest pages support high bases, 32-bit limits, transactional permission checks and write generations. Image/file/metadata limits bound parser work. Tests cover malformed/truncated headers, 10,000 seeded mutations, import/export/TLS/pdata metadata, relocation, permissions and cross-page faults.
+
+Validation: 6 unit tests pass in normal and ASan/UBSan builds. The libFuzzer source/target is present, but the selected Apple toolchain lacks libclang_rt.fuzzer_osx.a; coverage-guided fuzzing is not claimed. Deterministic mutation fuzzing ran successfully under sanitizers.
+
+Remaining M1 work: resource tree interpretation, bound import timestamps, load-config semantics, general real-DLL resolution/loading and TLS initialization. Directory bounds are inspected, not interpreted for these features. Unsupported relocation types and subpage section alignment fail explicitly at load. Later execution startup must reject metadata it cannot honor. See ADR 2 for milestone scope.
