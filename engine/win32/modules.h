@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/cpu/context.h"
 #include "engine/mem/address_space.h"
+#include "engine/nt/heap.h"
 #include "engine/nt/services.h"
 #include "engine/pe/image.h"
 #include <map>
@@ -10,14 +11,16 @@ namespace execon::win32 {
 enum class MissingPolicy { Abort, ReturnError, IgnoreVoid };
 struct ProcessState {
   uint64_t image_base = 0, teb = 0, command_a = 0, command_w = 0;
+  std::map<std::string, std::string> environment;
   bool exited = false;
   uint32_t exit_code = 0;
 };
 class Modules {
 public:
-  Modules(nt::Services &services, ProcessState &state, std::ostream &log, MissingPolicy policy,
-          bool trace = false)
-      : services_(services), state_(state), log_(log), policy_(policy), trace_(trace) {}
+  Modules(nt::Services &services, nt::Heap &heap, ProcessState &state, std::ostream &log,
+          MissingPolicy policy, bool trace = false)
+      : services_(services), heap_(heap), state_(state), log_(log), policy_(policy), trace_(trace) {
+  }
   void bind(const pe::Image &image, uint64_t base, mem::AddressSpace &memory);
   bool contains(uint64_t pc) const { return stubs_.contains(pc); }
   void call(cpu::Context &cpu, mem::AddressSpace &memory);
@@ -26,6 +29,7 @@ public:
 
 private:
   nt::Services &services_;
+  nt::Heap &heap_;
   ProcessState &state_;
   std::ostream &log_;
   MissingPolicy policy_;

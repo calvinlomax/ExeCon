@@ -55,3 +55,5 @@ target_sources(execon_engine PRIVATE engine/nt/text.cpp engine/nt/services.cpp e
 if(EXECON_BUILD_TESTS)
   target_sources(execon_tests PRIVATE tests/unit/runtime.cpp)
 endif()
+
+target_sources(execon_engine PRIVATE engine/nt/paths.cpp engine/nt/heap.cpp)

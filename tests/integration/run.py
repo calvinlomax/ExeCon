@@ -35,6 +35,13 @@ for interp in ([True] if a.interp_only else [True,False]):
     r=subprocess.run([exe,*options,'--on-missing=return-error',a.build/'guests/missing-x86_64.exe'],capture_output=True)
     assert r.returncode==0 and b'missing API USER32.dll!MessageBoxW' in r.stderr,r.stderr
     count+=1
+    with tempfile.TemporaryDirectory(prefix='execon-files-') as td:
+        r=subprocess.run([exe,*options,'--drive',f'T={td}',a.build/'guests/files_heap-x86_64.exe'],capture_output=True)
+        assert r.returncode==0 and r.stdout==b'ExeCon\n',(r.returncode,r.stderr)
+        assert (Path(td)/'RoundTrip.bin').read_bytes()==b'ExeCon\n'
+    r=subprocess.run([exe,*options,'--env','EXECON_TEST=from environment',a.build/'guests/environment-x86_64.exe'],capture_output=True)
+    assert r.returncode==0 and r.stdout==b'from environment',(r.returncode,r.stderr)
+    count+=2
 r=subprocess.run([exe,'--inspect',a.build/'guests/hello-i686.exe'],capture_output=True)
 assert r.returncode==0 and b'PE32 x86' in r.stdout
 r=subprocess.run([exe,a.build/'guests/hello-i686.exe'],capture_output=True)

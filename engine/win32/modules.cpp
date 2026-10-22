@@ -1,7 +1,9 @@
 #include "engine/win32/modules.h"
 #include "engine/nt/text.h"
 #include <algorithm>
+#include <bit>
 #include <cctype>
+#include <chrono>
 #include <set>
 namespace execon::win32 {
 namespace {
@@ -39,13 +41,41 @@ std::string read_string(mem::AddressSpace &m, uint64_t a, bool wide) {
 }
 bool Modules::implemented(const std::string &dll, const std::string &name) {
   auto module = canonical(dll);
-  static const std::set<std::string> kernel = {
-      "ExitProcess",      "GetStdHandle",     "WriteFile",           "ReadFile",
-      "WriteConsoleA",    "WriteConsoleW",    "GetLastError",        "SetLastError",
-      "GetCommandLineA",  "GetCommandLineW",  "GetCurrentProcessId", "GetCurrentThreadId",
-      "GetModuleHandleA", "GetModuleHandleW", "CloseHandle"};
+  static const std::set<std::string> kernel = {"ExitProcess",
+                                               "GetStdHandle",
+                                               "WriteFile",
+                                               "ReadFile",
+                                               "WriteConsoleA",
+                                               "WriteConsoleW",
+                                               "GetLastError",
+                                               "SetLastError",
+                                               "GetCommandLineA",
+                                               "GetCommandLineW",
+                                               "GetCurrentProcessId",
+                                               "GetCurrentThreadId",
+                                               "GetModuleHandleA",
+                                               "GetModuleHandleW",
+                                               "CloseHandle",
+                                               "CreateFileA",
+                                               "CreateFileW",
+                                               "SetFilePointerEx",
+                                               "GetFileSizeEx",
+                                               "GetProcessHeap",
+                                               "HeapAlloc",
+                                               "HeapFree",
+                                               "HeapReAlloc",
+                                               "HeapSize",
+                                               "GetEnvironmentVariableA",
+                                               "GetEnvironmentVariableW",
+                                               "GetCurrentDirectoryA",
+                                               "GetCurrentDirectoryW",
+                                               "QueryPerformanceCounter",
+                                               "QueryPerformanceFrequency",
+                                               "GetACP",
+                                               "GetConsoleOutputCP"};
   static const std::set<std::string> crt = {"puts",   "strlen", "memcpy", "memmove",
-                                            "memset", "exit",   "_exit"};
+                                            "memset", "exit",   "_exit",  "malloc",
+                                            "calloc", "free",   "realloc"};
   return (module == "kernel32.dll" && kernel.contains(name)) ||
          ((module == "ucrtbase.dll" || module == "msvcrt.dll") && crt.contains(name)) ||
          (module == "ntdll.dll" && name == "RtlExitUserProcess");
@@ -158,6 +188,115 @@ uint64_t Modules::invoke(const pe::Import &api, cpu::Context &c, mem::AddressSpa
       m.store(written, done, 4);
     return 1;
   }
+
+  if (name == "CreateFileA" || name == "CreateFileW") {
+    auto flags = uint32_t(arg(5));
+    if (arg(3) || arg(6) || (flags & ~0x80U))
+      throw nt::Error(120, "security/template/extended file flags not implemented");
+    return services_.open(read_string(m, arg(0), name == "CreateFileW"), uint32_t(arg(1)),
+                          uint32_t(arg(2)), uint32_t(arg(4)));
+  }
+  if (name == "SetFilePointerEx") {
+    if (arg(2))
+      m.check(arg(2), 8, mem::Write);
+    auto value = services_.seek(arg(0), std::bit_cast<int64_t>(arg(1)), uint32_t(arg(3)));
+    if (arg(2))
+      m.store(arg(2), value, 8);
+    return 1;
+  }
+  if (name == "GetFileSizeEx") {
+    m.check(arg(1), 8, mem::Write);
+    m.store(arg(1), services_.file_size(arg(0)), 8);
+    return 1;
+  }
+  if (name == "GetProcessHeap")
+    return 0x400;
+  if (name == "HeapAlloc" || name == "HeapFree" || name == "HeapReAlloc" || name == "HeapSize") {
+    if (arg(0) != 0x400)
+      throw nt::Error(6, "only the process heap is implemented");
+    if (arg(1) & ~8ULL)
+      throw nt::Error(120, "heap flags are not implemented");
+    if (name == "HeapAlloc")
+      return heap_.allocate(arg(2));
+    if (name == "HeapFree") {
+      heap_.free(arg(2));
+      return 1;
+    }
+    if (name == "HeapSize")
+      return heap_.size(arg(2));
+    return heap_.reallocate(arg(2), arg(3));
+  }
+  if (name == "malloc")
+    return heap_.allocate(arg(0));
+  if (name == "calloc") {
+    if (arg(0) && arg(1) > UINT64_MAX / arg(0))
+      throw nt::Error(8, "calloc size overflow");
+    return heap_.allocate(arg(0) * arg(1));
+  }
+  if (name == "free") {
+    heap_.free(arg(0));
+    return 0;
+  }
+  if (name == "realloc") {
+    if (!arg(0))
+      return heap_.allocate(arg(1));
+    if (!arg(1)) {
+      heap_.free(arg(0));
+      return 0;
+    }
+    return heap_.reallocate(arg(0), arg(1));
+  }
+  if (name == "GetACP" || name == "GetConsoleOutputCP")
+    return 65001;
+  if (name == "QueryPerformanceCounter" || name == "QueryPerformanceFrequency") {
+    uint64_t value = name == "QueryPerformanceFrequency"
+                         ? 1000000000ULL
+                         : uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::steady_clock::now().time_since_epoch())
+                                        .count());
+    m.store(arg(0), value, 8);
+    return 1;
+  }
+  if (name == "GetEnvironmentVariableA" || name == "GetEnvironmentVariableW" ||
+      name == "GetCurrentDirectoryA" || name == "GetCurrentDirectoryW") {
+    bool current = name.starts_with("GetCurrentDirectory"), wide = name.back() == 'W';
+    std::string value;
+    if (current)
+      value = services_.paths().cwd();
+    else {
+      auto key = read_string(m, arg(0), wide);
+      auto upper = [](std::string s) {
+        for (auto &c : s)
+          c = char(std::toupper(static_cast<unsigned char>(c)));
+        return s;
+      };
+      bool found = false;
+      for (auto &[k, v] : state_.environment)
+        if (upper(k) == upper(key)) {
+          value = v;
+          found = true;
+          break;
+        }
+      if (!found)
+        throw nt::Error(203, "environment variable not found");
+    }
+    auto buffer = arg(1);
+    auto capacity = uint32_t(arg(current ? 0 : 2));
+    auto chars = nt::utf16(value);
+    auto count = wide ? chars.size() : value.size();
+    if (capacity <= count)
+      return count + 1;
+    m.check(buffer, (count + 1) * (wide ? 2 : 1), mem::Write);
+    if (wide) {
+      for (size_t n = 0; n < chars.size(); ++n)
+        m.store(buffer + n * 2, chars[n], 2);
+      m.store(buffer + chars.size() * 2, 0, 2);
+    } else {
+      m.write(buffer, std::span(reinterpret_cast<const uint8_t *>(value.data()), value.size()));
+      m.store(buffer + value.size(), 0, 1);
+    }
+    return count;
+  }
   if (name == "strlen")
     return read_string(m, arg(0)).size();
   if (name == "puts") {
@@ -187,7 +326,10 @@ void Modules::call(cpu::Context &c, mem::AddressSpace &m) {
   } catch (const nt::Error &e) {
     m.store(state_.teb + 0x68, e.code, 4);
     log_ << api.dll << '!' << api.name << ": " << e.what() << " (error " << e.code << ")\n";
-    result = api.name == "GetStdHandle" ? UINT64_MAX : 0;
+    result = (api.name == "GetStdHandle" || api.name == "CreateFileA" ||
+              api.name == "CreateFileW" || api.name == "HeapSize")
+                 ? UINT64_MAX
+                 : 0;
   }
   c.gpr[cpu::RAX] = result;
   if (state_.exited)

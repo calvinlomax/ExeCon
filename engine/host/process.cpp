@@ -84,7 +84,8 @@ uint32_t run(const pe::Image &p, const std::vector<std::string> &args, const Opt
   m.store(params, 0x1000, 4);
   m.store(params + 4, 0x1000, 4);
   m.store(params + 8, 1, 4);
-  nt::Services services;
+  nt::Services services(nt::Paths(o.prefix, o.cwd.empty() ? "C:\\" : o.cwd.string(), o.drives));
+  nt::Heap heap(m);
   m.store(teb + 0x40, services.process_id(), 8);
   for (unsigned n = 0; n < 3; ++n)
     m.store(params + 0x20 + n * 8, services.standard_handle(-10 - int(n)), 8);
@@ -98,8 +99,8 @@ uint32_t run(const pe::Image &p, const std::vector<std::string> &args, const Opt
   }
   m.store(cursor, 0, 2);
   m.store(params + 0x80, env, 8);
-  win32::ProcessState state{base, teb, strings, strings + 0x10000, false, 0};
-  win32::Modules modules(services, state, log, o.missing, o.trace_api);
+  win32::ProcessState state{base, teb, strings, strings + 0x10000, o.environment, false, 0};
+  win32::Modules modules(services, heap, state, log, o.missing, o.trace_api);
   modules.bind(p, base, m);
   jit::Dispatcher dispatcher(o.interp_only);
   auto print_stats = [&] {
