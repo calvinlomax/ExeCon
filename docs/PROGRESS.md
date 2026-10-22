@@ -24,3 +24,11 @@ Implemented bounds-checked PE32/PE32+ parsing, section loading/permissions, DIR6
 Validation: 6 unit tests pass in normal and ASan/UBSan builds. The libFuzzer source/target is present, but the selected Apple toolchain lacks libclang_rt.fuzzer_osx.a; coverage-guided fuzzing is not claimed. Deterministic mutation fuzzing ran successfully under sanitizers.
 
 Remaining M1 work: resource tree interpretation, bound import timestamps, load-config semantics, general real-DLL resolution/loading and TLS initialization. Directory bounds are inspected, not interpreted for these features. Unsupported relocation types and subpage section alignment fail explicitly at load. Later execution startup must reject metadata it cannot honor. See ADR 2 for milestone scope.
+
+## M2 — integer decoder and reference interpreter (partial)
+
+Implemented a handwritten arithmetic opcode table and mode-aware decoder, 8/16/32/64-bit operands, REX/ModRM/SIB/displacements/immediates, RIP/EIP-relative addresses, FS/GS offsets, disassembly, typed register-transfer IR, constant-address LEA optimization, integer interpreter and lazy flags. Unsupported instructions, LOCK and REP forms are explicit guest illegal-instruction faults. Decoder coverage is available through `x86::coverage()` (CLI exposure follows). No SSE/x87/atomic/string instruction support yet. CPUID advertises no optional features; RDTSC diagnoses its missing timing model.
+
+Validation: 5,144 randomized/edge-case full-state instruction comparisons against Unicorn 2.1.4 pass in 32/64-bit interpreter modes; all general registers, defined flags, RIP and 4 KiB of memory are compared. 20,000 random decoder inputs produced 9,737 supported decodes whose lengths all match Capstone 5.0.7. Oracle uncovered a real zero-count 32-bit shift bug (upper-register zero extension); fixed and regression-tested without weakening comparisons. Undefined AF/OF/CF cases are excluded only per architectural definitions. Unit and ASan/UBSan tests pass. Unicorn needs execution outside this workspace sandbox (sandbox raises SIGILL during its memory/JIT setup); the product does not depend on it.
+
+Remaining: broader instruction coverage, block/sequence oracle tests, SSE2, strings, atomics, multiply/divide, 16-bit address forms. Test fixtures are generated from source; no third-party binaries committed.
