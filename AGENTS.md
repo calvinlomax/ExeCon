@@ -1,0 +1,9 @@
+# ExeCon contributor instructions
+
+Build with `scripts/build.sh`; test with `scripts/run-tests.sh`. Portable tests can be built with CMake on other hosts. ASan/UBSan: `EXECON_BUILD_DIR=build-asan scripts/build.sh -DEXECON_SANITIZE=ON`, then test that directory. No Wine code, Rosetta, QEMU or virtualization in product binaries. Public specifications only; document sources. Developer-only external oracles are optional and must report skipped checks explicitly.
+
+Use C++20, -Wall -Wextra -Werror, RAII, no raw owning new/delete, no mutable globals in the engine. Run clang-format via `scripts/format.sh`. Use execon namespace, execon_ C API, EXECON_* environment variables, and ExeCon product capitalization. Bundle identity lives only in config/product.xcconfig. macOS deployment target is 14.0, arm64 only.
+
+Add instructions through mode-aware decoder, typed IR, interpreter semantics and then JIT. Add independent edge-case and randomized tests, including flags and faults, before claiming coverage. Unsupported encodings must throw a diagnostic guest illegal instruction, never become a NOP. JIT unsupported blocks fall back to the interpreter. A missing API must retain its DLL/name/call site; no success-shaped stub returns. Thin Win32 wrappers call NT services; guest pointers never become native callable pointers.
+
+Keep commits per milestone, tests passing, docs/PROGRESS.md honest. A partial milestone is not complete. Report missing dependencies and unrun tests. Record architectural decisions in docs/adr. Do not commit downloaded executables or proprietary binaries. In-repo synthetic PE fixtures are generated from source at test time. Test-only harness registration is the sole justified mutable global registry.
