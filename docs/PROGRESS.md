@@ -76,3 +76,11 @@ Extended process startup to 32-bit stack/PEB/process parameters/loader lists and
 Validation: 42 integration checks pass over x86_64/i686 and interpreter/default dispatcher combinations. New compiler-built startup probes verify TEB self-pointers and PEB image bases, and CRT subset probes exercise malloc/puts/free plus cdecl returns. All guest sources compile with warnings-as-errors. 22 sanitizer interpreter integration checks pass. The independent integer oracle and decoder fuzz-length comparisons were rerun after adding MOV moffs.
 
 Remaining: x87, 32-bit SSE, fastcall, x86 SEH dispatch and 32-bit native translation. Earlier M4 PE32 rejection notes record historical behavior; PE32 now runs the explicitly tested console subset. This does not complete M7 or broad PE32 compatibility.
+
+## M8 — real acceptance harness and measured blockers (not passing)
+
+Continued 2026-10-23. Downloaded official pinned 7-Zip 26.05 extra/installer and curl 8.23.0_4 archives, verified release SHA-256 digests before extraction, and extracted x64 7za.exe, 7z.exe/7z.dll and curl.exe into ignored third_party_bin/. A separately pinned native 7-Zip extractor is development-only. No Microsoft binaries or third-party executables are committed or bundled. Integrity check rejects a tampered archive.
+
+Implemented real archive list/create/extract/checksum gates and a localhost plain-HTTP curl gate. All three targets fail in both backends; the acceptance script returns nonzero. 7za/7z reach a missing msvcrt!__set_app_type call; curl is rejected at load-config initialization. Exact import reports show 121/113/252 missing imports respectively. docs/COMPATIBILITY.md records concrete next dependencies. No startup bypasses or success stubs were added to manufacture acceptance.
+
+The sandbox denied localhost bind for the HTTP fixture; the gate was rerun outside it. HTTPS through Schannel/SSPI is explicitly out of scope. Acceptance remains incomplete.

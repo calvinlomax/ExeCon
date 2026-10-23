@@ -1,0 +1,4 @@
+exit=126
+missing API msvcrt.dll!__set_app_type return-address=0x4e9ad8
+stats: translated_blocks=4 cache_hits=0 interpreter_fallbacks=14 invalidations=0 instructions=24
+ExeCon: unimplemented import msvcrt.dll!__set_app_type (no safe return contract for selected policy)

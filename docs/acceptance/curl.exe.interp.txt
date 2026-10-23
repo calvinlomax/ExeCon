@@ -1,0 +1,2 @@
+exit=126
+ExeCon: load-config initialization is not implemented
