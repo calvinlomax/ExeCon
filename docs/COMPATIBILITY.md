@@ -13,6 +13,8 @@ Status on 2026-10-23: **experimental integer console subset, not a general Windo
 | `files_heap.c` | Pass | Pass | Pass | File create/read/write/seek/close, process heap realloc |
 | `environment.c` | Pass | Pass | Pass | Explicit environment lookup and QPC frequency |
 | `missing.c` | Diagnostic pass | Diagnostic pass | Diagnostic pass | Default failure; explicit MessageBox failure return policy |
+| `fault.c` / `illegal.c` | Diagnostic pass | Diagnostic pass | Diagnostic pass | Access violation / illegal instruction, guest PC and JSON fault status |
+| Ordinary CRT/runtime fixtures | **Fail** | **Fail** | **Fail / build blocker** | Unsupported CRT/TLS/load-config startup; i686 SEH compiler error |
 | 7-Zip `7za.exe` 26.05 x64 | **Fails** | **Fails** | Not this artifact | First call to missing `msvcrt!__set_app_type` |
 | 7-Zip `7z.exe` 26.05 x64 | **Fails** | **Fails** | Not this artifact | Same CRT startup blocker; real `7z.dll` loading also absent |
 | curl 8.23.0_4 x64 | **Fails** | **Fails** | Not this artifact | Rejected at load-config initialization |
@@ -28,6 +30,8 @@ Official packages and hashes are pinned in [binaries.json](../tests/acceptance/b
 - **curl:** 252 missing imports, 24 implemented. [Exact import report](acceptance/curl.exe.imports.txt). Requires load-config/TLS/CRT startup, substantial UCRT stdio/locale/string/environment support, thread/synchronization/VM APIs and the imported Winsock surface (`WSAStartup`, sockets, DNS, select, event APIs, send/recv, etc.). It also imports LDAP, certificate, IDN and security interfaces; only exercised APIs should be implemented, and unused imports remain diagnostic stubs. `Secur32!InitSecurityInterfaceA` is not emulated. **HTTPS through Schannel/SSPI is explicitly unsupported.** The acceptance HTTP fixture is localhost-only and uses plain `http://`.
 
 Archive listing/creation/extraction and curl HTTP are **not passing acceptance tests**. `scripts/run-acceptance.sh` exits nonzero while these targets fail; `--diagnose-only` generates reports and expressly does not claim a pass. Skipping a startup requirement or returning success from a stub would invalidate these gates.
+
+The broader source fixtures in [tests/guests/runtime/](../tests/guests/runtime/) have expected outputs and a separate runner, `python3 tests/integration/runtime.py build`. Current results are 32 startup failures and one i686 SEH build blocker from the pinned llvm-mingw toolchain. The passing explicit-entry fixtures bypass ordinary compiler CRT startup by design; they do not establish CRT compatibility. The MinGW C++ exception fixture is not an MSVC exception test. Latest supported-subset and sanitizer totals are in [PROGRESS.md](PROGRESS.md).
 
 ## Boundaries
 

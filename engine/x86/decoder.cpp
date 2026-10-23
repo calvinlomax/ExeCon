@@ -293,6 +293,8 @@ struct Decoder {
       case 0xff: {
         auto m = byte();
         unsigned g = m >> 3 & 7, bits = opcode == 0xfe ? 8 : w;
+        if (mode == Mode::X64 && op16 && opcode == 0xff && (g == 2 || g == 4))
+          bad("operand-size-overridden indirect control flow not implemented");
         if (opcode == 0xff && (g == 2 || g == 4 || g == 6))
           bits = stack_width();
         ins.dst = rm(m, bits);

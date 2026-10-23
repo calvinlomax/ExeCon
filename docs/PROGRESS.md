@@ -1,12 +1,12 @@
 # Progress
 
-Date: 2026-10-22 (America/Indiana/Indianapolis). This is an incremental implementation, not a completed Windows compatibility runtime.
+Updated: 2026-10-23 (America/Indiana/Indianapolis). This is an incremental implementation, not a completed Windows compatibility runtime. Earlier milestone test counts below are historical; the latest validation totals are in M9.
 
 ## Environment
 
 - Host: Darwin arm64 (Apple Silicon); eligible for native JIT tests.
 - Apple clang 21.0.0, Swift 6.4, command-line tools installed.
-- Initial xcodebuild probe failed because CommandLineTools was selected. Follow-up found Xcode 27.1 (27A9275) in /Applications/Xcode.app; DEVELOPER_DIR selects it without changing system settings. App builds will use it.
+- Initial xcodebuild probe failed because CommandLineTools was selected. Follow-up found Xcode 27.1 (27A9275) in /Applications/Xcode.app. Its license/setup is incomplete, so app builds use the Command Line Tools fallback described in M5 without changing system settings.
 - CMake 4.4.3, Ninja installed.
 - llvm-mingw and clang-format absent from PATH at initial check. Installed development-only clang-format 18.1.8, Unicorn 2.1.4 and Capstone 5.0.7 in ignored .dev-tools/venv. Xcode also contains clang-format.
 - Shell HTTPS probe to Microsoft Learn failed DNS (curl exit 6) in sandbox. Documentation browser can reach Microsoft Learn and Apple public docs. An authorized unsandboxed pip download succeeded; network is available outside the shell sandbox.
@@ -84,3 +84,38 @@ Continued 2026-10-23. Downloaded official pinned 7-Zip 26.05 extra/installer and
 Implemented real archive list/create/extract/checksum gates and a localhost plain-HTTP curl gate. All three targets fail in both backends; the acceptance script returns nonzero. 7za/7z reach a missing msvcrt!__set_app_type call; curl is rejected at load-config initialization. Exact import reports show 121/113/252 missing imports respectively. docs/COMPATIBILITY.md records concrete next dependencies. No startup bypasses or success stubs were added to manufacture acceptance.
 
 The sandbox denied localhost bind for the HTTP fixture; the gate was rerun outside it. HTTPS through Schannel/SSPI is explicitly out of scope. Acceptance remains incomplete.
+
+## M9 — hardening, baseline benchmark and handoff (partial)
+
+Audited diagnostics and missing-import behavior: callable import tokens now reject data reads, Windows device names cannot be treated as directories, and an unsupported operand-size-prefixed indirect branch is rejected explicitly. Guest faults retain both the current guest instruction PC and the accessed address. Added compiler-built invalid-access/illegal-instruction probes and a regression for import data reads. The Swift child-input pipe suppresses SIGPIPE during child-exit races. C API integration tests exercise repeated backend lifetimes and separate guest exit from engine error.
+
+Consolidated CMake targets and made `scripts/run-tests.sh` run the supported guest matrix, download-integrity check, external oracles, Swift console tests and signed-host self-checks. Native-only unit cases report explicit skips under sanitizers. Added ordinary-CRT runtime fixtures and expected outputs for argv/environment, directories, heap stress, threads, TLS, SEH, C++ exceptions, floating point, strings/locale and registry. Those remain separate failing compatibility gates, not hidden passes. The i686 SEH fixture fails to compile with the pinned llvm-mingw assembler-label error; its source and error report are retained. MinGW C++ fixtures do not validate MSVC exception compatibility.
+
+Final supported-subset validation on this arm64 host:
+
+- Normal build: 24 C++ unit cases, no failures/skips; 50 PE/CLI integration checks; C API calls in both backend configurations for PE32 and PE32+.
+- Interpreter oracle: 5,312 full-register/defined-flags/4 KiB memory comparisons pass against Unicorn. Decoder fuzzing: 20,000 inputs, with all 10,001 accepted lengths matching Capstone.
+- Native oracle: 1,024 full-state comparisons pass. Existing multi-instruction, cache-invalidation, SMC and precise-fault unit tests also pass.
+- ASan/UBSan: 24 unit cases, no failures and 2 native-only skips; 26 interpreter CLI checks, C API checks and the interpreter/decoder oracle suites pass.
+- Formatting and hash-tampering regression pass. Swift streaming UTF-8/ANSI tests pass. CLI and bundled helper signatures and actual MAP_JIT self-checks pass. `scripts/build.sh` produces the CLI, static library and signed SwiftUI app with warnings-as-errors.
+- Broad runtime gate: 32 execution failures at unsupported startup, plus the i686 SEH build blocker. Real third-party gate: all three targets fail in both backends. These gates correctly return nonzero.
+
+Added a checked Release arithmetic microbenchmark: 800,000 guest instructions measured 6.85 ms interpreted and 2.13 ms native (228 bytes of generated code). This excludes translation, dispatch and memory and is not an application speed claim. See [BENCHMARKS.md](BENCHMARKS.md). Hot-path profiling, general register allocation, chaining and TSO-barrier optimization remain undone; M9 is partial.
+
+README, signing instructions, compatibility matrix, GUI design alternatives and architectural boundaries are documented. No GUI design was selected or rendering implemented. No third-party binaries are tracked. Interactive app/Finder/Dock behavior, Xcode-project compilation, notarization, separate macOS 14 hardware and coverage-guided libFuzzer remain unverified.
+
+## Deliverable status and next work
+
+| Deliverable | Status |
+|---|---|
+| One-command CLI + app build | Pass on this host via documented Swift compiler fallback |
+| PE32+ console hello, native and interpreter | Pass for the explicit-entry integer fixture |
+| Independent differential tests | Pass for the implemented instruction subset |
+| SwiftUI console, settings and .exe association | Built/signed; interactive integration unverified |
+| x64 SEH and MSVC C++ exceptions | Not implemented |
+| PE32 console support | Tested integer/stdcall/cdecl subset; x87/SEH/fastcall absent |
+| 7-Zip and curl HTTP acceptance | Failing, with exact import/startup reports |
+| Architecture/progress/signing/compatibility/GUI/ADRs | Present; limitations recorded |
+| GUI diagnostic stubs | Present; no Windows GUI rendering |
+
+Recommended sequence: extend CPU coverage (especially SSE2 and arithmetic needed by CRT), implement NT virtual-memory services and real DLL/TLS/load-config startup, then add full CRT and exception dispatch with native Windows/MSVC fixtures. Follow with thread/synchronization semantics and 32-bit x87/SEH. Use the retained runtime and third-party gates to measure progress before optimizing dispatch or attempting GUI rendering.

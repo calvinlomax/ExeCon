@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 namespace test {
+struct Skip : std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
 struct Case {
   std::string name;
   std::function<void()> run;
@@ -35,3 +38,5 @@ inline void check(bool ok, const char *expr, const char *file, int line) {
     }                                                                                              \
     CHECK(caught);                                                                                 \
   } while (false)
+
+#define SKIP(reason) throw test::Skip(reason)

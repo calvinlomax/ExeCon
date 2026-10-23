@@ -2,6 +2,7 @@
 #include "engine/nt/text.h"
 #include "engine/win32/modules.h"
 #include "tests/unit/test.h"
+#include <sstream>
 using namespace execon;
 TEST(unicode_roundtrip_and_rejection) {
   std::string value = "Unicode: \xce\xbb \xf0\x9f\x9a\x80";
@@ -45,6 +46,7 @@ TEST(paths_windows_normalization_and_devices) {
   CHECK(paths.resolve("Z:\\tmp") == "/tmp");
   THROWS(paths.resolve("\\\\server\\share"));
   THROWS(paths.resolve("C:relative"));
+  THROWS(paths.resolve("C:\\NUL\\child"));
   THROWS(paths.resolve("X:\\unknown"));
   THROWS(paths.resolve("CON.txt:stream"));
 }
@@ -86,4 +88,22 @@ TEST(file_handles_sharing_and_case_lookup) {
   auto read = files.open("c:\\mixedcase.DAT", 0x80000000, 1, 3);
   CHECK(files.read(read, 3).size() == 3);
   files.close(read);
+}
+
+TEST(import_thunks_are_not_fake_data_objects) {
+  mem::AddressSpace memory;
+  memory.map(0x1000, 4096, mem::Read | mem::Write);
+  nt::Heap heap(memory);
+  nt::Services services;
+  win32::ProcessState state;
+  std::ostringstream log;
+  win32::Modules modules(services, heap, state, log, win32::MissingPolicy::Abort);
+  pe::Image image;
+  image.is64 = true;
+  image.imports.push_back({"kernel32.dll", "ExitProcess", 0, 0x100, false});
+  modules.bind(image, 0x1000, memory);
+  auto token = memory.load(0x1100, 8);
+  CHECK(modules.contains(token));
+  THROWS(memory.load(token, 1));
+  CHECK(memory.load(token, 2, mem::Execute) == 0x0b0f);
 }

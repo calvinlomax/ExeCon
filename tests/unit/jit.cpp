@@ -15,7 +15,7 @@ TEST(arm64_encoder_known_words) {
 }
 TEST(jit_native_arithmetic_and_cache_invalidation) {
   if (!host::JitMemory::supported())
-    return;
+    SKIP("native JIT unavailable in this platform/sanitizer configuration");
   mem::AddressSpace m;
   m.map(0x1000, 4096, 7);
   std::array<uint8_t, 12> code = {0x48, 0xb8, 0x7f, 0, 0, 0, 0, 0, 0, 0, 0x04, 0x01};
@@ -50,7 +50,7 @@ TEST(jit_memory_fallback_and_precise_fault) {
 }
 TEST(jit_block_matches_interpreter_and_maps_pc) {
   if (!host::JitMemory::supported())
-    return;
+    SKIP("native JIT unavailable in this platform/sanitizer configuration");
   std::vector<uint8_t> code = {0x48, 0x01, 0xd8, 0x48, 0xff, 0xc0, 0x48, 0xf7,
                                0xd8, 0x66, 0x31, 0xd8, 0x48, 0xff, 0xc8};
   ir::Block b{0x1000, {}};

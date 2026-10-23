@@ -104,7 +104,8 @@ void Modules::bind(const pe::Image &p, uint64_t base, mem::AddressSpace &m) {
     m.protect(page, 4096, flags);
     next += 16;
   }
-  m.protect(stub_base, size, mem::Read | mem::Execute);
+  // Thunks are callable tokens, never data; reject reads instead of faking imported data.
+  m.protect(stub_base, size, mem::Execute);
 }
 uint64_t Modules::invoke(const pe::Import &api, cpu::Context &c, mem::AddressSpace &m) {
   auto arg = [&](unsigned n) { return argument(c, m, n); };

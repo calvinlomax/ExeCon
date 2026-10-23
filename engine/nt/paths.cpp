@@ -87,6 +87,8 @@ std::filesystem::path Paths::resolve(std::string path) const {
       end = windows.size();
     auto part = windows.substr(begin, end - begin);
     auto device = lower(part.substr(0, part.find('.')));
+    if ((device == "nul" || device == "con") && end != windows.size())
+      throw Error(3, "a Windows device cannot be a directory");
     if (device == "nul")
       return "/dev/null";
     if (device == "con")

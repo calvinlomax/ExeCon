@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Darwin
 import SwiftUI
 
 struct ProgramSettings: Codable, Equatable {
@@ -93,6 +94,7 @@ final class Runner: ObservableObject {
         guard let program, !isRunning else { return }
         console = []; diagnostics = ""; stdoutDecoder = ConsoleDecoder(); stderrDecoder = ConsoleDecoder()
         let child = Process(), stdout = Pipe(), stderr = Pipe(), stdin = Pipe()
+        _ = fcntl(stdin.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
         let identifier = UUID(); runID = identifier
         child.executableURL = hostURL
         var arguments = ["--prefix", settings.prefix, "--cwd", settings.workingDirectory,

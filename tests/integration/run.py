@@ -43,9 +43,18 @@ for arch in ['x86_64','i686']:
         r=subprocess.run([exe,*options,'--env','EXECON_TEST=from environment',a.build/f'guests/environment-{arch}.exe'],capture_output=True)
         assert r.returncode==0 and r.stdout==b'from environment',(r.returncode,r.stderr)
         count+=2
+        for name, code in [('fault',0xc0000005),('illegal',0xc000001d)]:
+            with tempfile.TemporaryDirectory(prefix='execon-fault-') as td:
+                status=Path(td)/'status.json'
+                r=subprocess.run([exe,*options,'--status-file',status,a.build/f'guests/{name}-{arch}.exe'],capture_output=True)
+                assert r.returncode==127 and json.loads(status.read_text())=={'kind':'guest-fault','code':code},(r.returncode,r.stderr)
+                assert b'guest PC 0x' in r.stderr,r.stderr
+                if name=='fault': assert b'12345000' in r.stderr,r.stderr
+            count+=1
 r=subprocess.run([exe,'--inspect',a.build/'guests/hello-i686.exe'],capture_output=True)
 assert r.returncode==0 and b'PE32 x86' in r.stdout
 r=subprocess.run([exe,a.build/'guests/hello-i686.exe'],capture_output=True)
 assert r.returncode==0 and r.stdout==b'Hello from ExeCon!\n'
 count+=2
-print(f'PASS {count} PE/CLI integration checks; PE32 stdcall and PE32+ native/interpreter execution verified')
+modes='interpreter' if a.interp_only else 'native/interpreter'
+print(f'PASS {count} PE/CLI integration checks; PE32 stdcall and PE32+ {modes} execution verified')

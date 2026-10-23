@@ -207,8 +207,8 @@ int main(int argc, char **argv) {
       *log << "guest_exit=" << code << '\n';
     return int(code & 255);
   } catch (const execon::Fault &e) {
-    *log << "ExeCon guest fault 0x" << std::hex << e.code << " at 0x" << e.address << std::dec
-         << ": " << e.what() << '\n';
+    *log << "ExeCon guest fault 0x" << std::hex << e.code << " at guest PC 0x" << e.instruction_pc
+         << " (address 0x" << e.address << ")" << std::dec << ": " << e.what() << '\n';
     try {
       status("guest-fault", e.code);
     } catch (...) {

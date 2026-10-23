@@ -10,16 +10,20 @@ TEST(log_filters) {
   CHECK(out.str() == "ExeCon: visible\n");
 }
 int main() {
-  unsigned failed = 0;
+  unsigned failed = 0, skipped = 0;
   for (const auto &t : test::cases()) {
     try {
       t.run();
       std::cout << "PASS " << t.name << '\n';
+    } catch (const test::Skip &e) {
+      ++skipped;
+      std::cout << "SKIP " << t.name << ": " << e.what() << '\n';
     } catch (const std::exception &e) {
       ++failed;
       std::cerr << "FAIL " << t.name << ": " << e.what() << '\n';
     }
   }
-  std::cout << test::cases().size() << " tests, " << failed << " failures\n";
+  std::cout << test::cases().size() << " tests, " << failed << " failures, " << skipped
+            << " skipped\n";
   return failed ? 1 : 0;
 }

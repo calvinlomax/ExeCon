@@ -1,4 +1,5 @@
 #include "engine/host/process.h"
+#include "engine/cpu/fault.h"
 #include "engine/nt/text.h"
 namespace execon {
 namespace {
@@ -133,6 +134,10 @@ uint32_t run(const pe::Image &p, const std::vector<std::string> &args, const Opt
       dispatcher.step(c, m, (o.trace || o.dump_ir || o.dump_asm) ? &log : nullptr, o.dump_ir,
                       o.dump_asm);
     }
+  } catch (Fault &fault) {
+    fault.instruction_pc = c.rip;
+    print_stats();
+    throw;
   } catch (...) {
     print_stats();
     throw;
